@@ -23,7 +23,16 @@ export default function Register() {
       await register({ fullName, email, password, role, companyName: role === 'RECRUITER' ? companyName : undefined })
       navigate('/')
     } catch (err: any) {
-      setError(err?.response?.data?.message || 'Registration failed')
+      if (err?.response?.data?.errors) {
+        const fieldErrors = Object.values(err.response.data.errors).join(', ')
+        setError(fieldErrors)
+      } else if (err?.response?.data?.message) {
+        setError(err.response.data.message)
+      } else if (err?.message) {
+        setError(err.message)
+      } else {
+        setError('Registration failed')
+      }
     } finally {
       setLoading(false)
     }

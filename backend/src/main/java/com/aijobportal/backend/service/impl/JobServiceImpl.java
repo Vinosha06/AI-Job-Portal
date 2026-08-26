@@ -1,0 +1,172 @@
+package com.aijobportal.backend.service.impl;
+
+import com.aijobportal.backend.dto.JobRequest;
+import com.aijobportal.backend.entity.Job;
+import com.aijobportal.backend.entity.User;
+import com.aijobportal.backend.exception.BadRequestException;
+import com.aijobportal.backend.exception.ResourceNotFoundException;
+import com.aijobportal.backend.repository.JobRepository;
+import com.aijobportal.backend.repository.UserRepository;
+import com.aijobportal.backend.repository.UserSkillRepository;
+import com.aijobportal.backend.service.JobService;
+import lombok.RequiredArgsConstructor;
+import org.springframework.data.jpa.domain.Specification;
+import org.springframework.stereotype.Service;
+
+import java.util.Arrays;
+import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+@Service
+@RequiredArgsConstructor
+public class JobServiceImpl implements JobService {
+
+    private final JobRepository jobRepository;
+    private final UserRepository userRepository;
+    private final UserSkillRepository userSkillRepository;
+
+    private User getUserByEmail(String email) {
+        return userRepository.findByEmail(email)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+    }
+
+    @Override
+    public Job createJob(JobRequest request, String recruiterEmail) {
+        User recruiter = getUserByEmail(recruiterEmail);
+        if (recruiter.getCompany() == null) {
+            throw new BadRequestException("Recruiter is not linked to a company");
+        }
+
+        Job job = Job.builder()
+                .title(request.getTitle())
+                .description(request.getDescription())
+                .category(request.getCategory())
+                .jobType(request.getJobType())
+                .workMode(request.getWorkMode())
+                .location(request.getLocation())
+                .minSalary(request.getMinSalary())
+                .maxSalary(request.getMaxSalary())
+                .experienceRequired(request.getExperienceRequired())
+                .requiredSkills(request.getRequiredSkills())
+                .company(recruiter.getCompany())
+                .active(true)
+                .build();
+
+        return jobRepository.save(job);
+    }
+
+    @Override
+    public Job updateJob(Long jobId, JobRequest request, String recruiterEmail) {
+        Job job = getJobById(jobId);
+        User recruiter = getUserByEmail(recruiterEmail);
+
+        if (!job.getCompany().getId().equals(recruiter.getCompany().getId())) {
+            throw new BadRequestException("You are not allowed to edit this job");
+        }
+
+        job.setTitle(request.getTitle());
+        job.setDescription(request.getDescription());
+        job.setCategory(request.getCategory());
+        job.setJobType(request.getJobType());
+        job.setWorkMode(request.getWorkMode());
+        job.setLocation(request.getLocation());
+        job.setMinSalary(request.getMinSalary());
+        job.setMaxSalary(request.getMaxSalary());
+        job.setExperienceRequired(request.getExperienceRequired());
+        job.setRequiredSkills(request.getRequiredSkills());
+
+        return jobRepository.save(job);
+    }
+
+    @Override
+    public void deleteJob(Long jobId, String recruiterEmail) {
+        Job job = getJobById(jobId);
+        User recruiter = getUserByEmail(recruiterEmail);
+
+        if (!job.getCompany().getId().equals(recruiter.getCompany().getId())) {
+            throw new BadRequestException("You are not allowed to delete this job");
+        }
+
+        job.setActive(false);
+        jobRepository.save(job);
+    }
+
+    @Override
+    public Job getJobById(Long jobId) {
+        return jobRepository.findById(jobId)
+                .orElseThrow(() -> new ResourceNotFoundException("Job not found with id: " + jobId));
+    }
+
+    @Override
+    public List<Job> getAllActiveJobs() {
+        return jobRepository.findByActiveTrue();
+    }
+
+    @Override
+    public List<Job> getMyJobs(String recruiterEmail) {
+        User recruiter = getUserByEmail(recruiterEmail);
+        if (recruiter.getCompany() == null) {
+            return List.of();
+        }
+        return jobRepository.findByCompanyId(recruiter.getCompany().getId());
+    }
+
+    @Override
+    public List<Job> searchJobs(String keyword, String location, Job.WorkMode workMode, Job.JobType jobType) {
+        Specification<Job> spec = (root, query, cb) -> cb.isTrue(root.get("active"));
+
+        if (keyword != null && !keyword.isBlank()) {
+            spec = spec.and((root, query, cb) -> cb.or(
+                    cb.like(cb.lower(root.get("title")), "%" + keyword.toLowerCase() + "%"),
+                    cb.like(cb.lower(root.get("description")), "%" + keyword.toLowerCase() + "%")
+            ));
+        }
+        if (location != null && !location.isBlank()) {
+            spec = spec.and((root, query, cb) ->
+                    cb.like(cb.lower(root.get("location")), "%" + location.toLowerCase() + "%"));
+        }
+        if (workMode != null) {
+            spec = spec.and((root, query, cb) -> cb.equal(root.get("workMode"), workMode));
+        }
+        if (jobType != null) {
+            spec = spec.and((root, query, cb) -> cb.equal(root.get("jobType"), jobType));
+        }
+
+        return jobRepository.findAll(spec);
+    }
+
+    /**
+     * Simple AI-style job matching: compares the job seeker's skills against
+     * each job's requiredSkills and ranks jobs by percentage match.
+     */
+    @Override
+    public List<Job> getRecommendedJobs(String jobSeekerEmail) {
+        User user = getUserByEmail(jobSeekerEmail);
+
+        Set<String> userSkills = userSkillRepository.findByUserId(user.getId()).stream()
+                .map(us -> us.getSkill().getName().toLowerCase().trim())
+                .collect(Collectors.toSet());
+
+        List<Job> activeJobs = jobRepository.findByActiveTrue();
+
+        return activeJobs.stream()
+                .sorted((j1, j2) -> Double.compare(matchScore(j2, userSkills), matchScore(j1, userSkills)))
+                .collect(Collectors.toList());
+    }
+
+    private double matchScore(Job job, Set<String> userSkills) {
+        if (job.getRequiredSkills() == null || job.getRequiredSkills().isBlank() || userSkills.isEmpty()) {
+            return 0;
+        }
+        List<String> required = Arrays.stream(job.getRequiredSkills().split(","))
+                .map(String::trim).map(String::toLowerCase)
+                .filter(s -> !s.isBlank())
+                .collect(Collectors.toList());
+
+        if (required.isEmpty()) return 0;
+
+        long matched = required.stream().filter(userSkills::contains).count();
+        return (matched * 100.0) / required.size();
+    }
+}

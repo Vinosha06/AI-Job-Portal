@@ -31,8 +31,9 @@ build/
 
 ### VS Code ###
 .vscode/
-<<<<<<< HEAD
 
+### Sensitive config - never commit real secrets ###
+src/main/resources/application.properties
 
-=======
->>>>>>> fa317d6aae82ab44dd0d5a36ffc24831138123d2
+### Uploaded files ###
+uploads/

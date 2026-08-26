@@ -1,0 +1,33 @@
+spring.application.name=AI-Job-Portal
+
+# ===================== DATABASE (MySQL) =====================
+spring.datasource.url=jdbc:mysql://localhost:3306/ai_job_portal?useSSL=false&serverTimezone=UTC&createDatabaseIfNotExist=true&allowPublicKeyRetrieval=true
+spring.datasource.username=root
+spring.datasource.password=YOUR_MYSQL_PASSWORD
+
+spring.datasource.driver-class-name=com.mysql.cj.jdbc.Driver
+
+# ===================== JPA / HIBERNATE =====================
+spring.jpa.hibernate.ddl-auto=update
+spring.jpa.show-sql=true
+spring.jpa.properties.hibernate.format_sql=true
+spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.MySQLDialect
+
+# ===================== SERVER =====================
+server.port=8080
+
+# ===================== JWT =====================
+# 256-bit (32+ char) secret used to sign JWT tokens - change this in production
+app.jwt.secret=CHANGE_THIS_TO_A_LONG_RANDOM_SECRET_KEY_1234567890
+app.jwt.expiration-ms=86400000
+
+# ===================== FILE UPLOAD =====================
+spring.servlet.multipart.max-file-size=10MB
+spring.servlet.multipart.max-request-size=10MB
+app.upload.dir=uploads/resumes
+
+# ===================== AI (OpenAI) =====================
+# Get a key from https://platform.openai.com and put it here
+app.openai.api-key=YOUR_OPENAI_API_KEY
+app.openai.model=gpt-4o-mini
+app.openai.base-url=https://api.openai.com/v1/chat/completions

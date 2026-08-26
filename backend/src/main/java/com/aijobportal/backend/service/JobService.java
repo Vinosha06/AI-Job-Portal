@@ -1,0 +1,17 @@
+package com.aijobportal.backend.service;
+
+import com.aijobportal.backend.dto.JobRequest;
+import com.aijobportal.backend.entity.Job;
+
+import java.util.List;
+
+public interface JobService {
+    Job createJob(JobRequest request, String recruiterEmail);
+    Job updateJob(Long jobId, JobRequest request, String recruiterEmail);
+    void deleteJob(Long jobId, String recruiterEmail);
+    Job getJobById(Long jobId);
+    List<Job> getAllActiveJobs();
+    List<Job> searchJobs(String keyword, String location, Job.WorkMode workMode, Job.JobType jobType);
+    List<Job> getRecommendedJobs(String jobSeekerEmail);
+    List<Job> getMyJobs(String recruiterEmail);
+}
